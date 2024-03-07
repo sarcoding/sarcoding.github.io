@@ -5,80 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-
-        #video {
+        video {
             width: 100%;
             height: auto;
-            max-width: 100%;
-            display: block;
         }
-
-        #scan-btn {
-            display: block;
-            margin: 10px auto;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
     </style>
 </head>
 <body>
-    <video id="video" width="100%" height="auto" playsinline></video>
-    <button id="scan-btn">Scan QR Code</button>
+    <video id="video" playsinline></video>
     <canvas id="canvas" style="display:none;"></canvas>
-    <script src="scanner.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@3.0.0"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
-        const scanBtn = document.getElementById('scan-btn');
         const context = canvas.getContext('2d');
+        let scanning = false;
 
         // Access the device camera
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
             .then((stream) => {
                 video.srcObject = stream;
                 video.play();
+                requestAnimationFrame(scanFrame);
             })
             .catch((error) => {
                 console.error('Error accessing the camera:', error);
             });
 
-        // Event listener for the "Scan QR Code" button
-        scanBtn.addEventListener('click', () => {
-            // Draw the current video frame onto the canvas
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Function to continuously scan for QR codes
+        function scanFrame() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Extract image data from the canvas
-            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-
-            // Decode the QR code from the image data
-            const qrCode = decodeQRCode(imageData);
-
-            // Process the decoded QR code (e.g., display it, perform an action)
-            if (qrCode) {
-                alert('QR Code scanned: ' + qrCode);
-            } else {
-                alert('No QR Code found.');
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                const code = decodeQRCode(imageData);
+                if (code) {
+                    alert('QR Code scanned: ' + code);
+                    scanning = false;
+                }
             }
-        });
+
+            if (!scanning) {
+                return;
+            }
+
+            requestAnimationFrame(scanFrame);
+        }
 
         // Function to decode QR code from image data
         function decodeQRCode(imageData) {
-            // Use a QR code decoding library (e.g., jsQR, ZXing) to process the image data
-            // Return the decoded QR code text or null if no QR code is found
-            // Example:
-            // const code = jsQR(imageData.data, imageData.width, imageData.height);
-            // return code ? code.data : null;
+            const luminanceSource = new ZXing.LuminanceSource(imageData.data, imageData.width, imageData.height);
+            const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+            try {
+                const result = new ZXing.MultiFormatReader().decode(binaryBitmap);
+                return result.getText();
+            } catch (error) {
+                return null;
+            }
         }
-    });
 
+        // Toggle scanning when clicking on the video element
+        video.addEventListener('click', () => {
+            scanning = !scanning;
+            if (scanning) {
+                requestAnimationFrame(scanFrame);
+            }
+        });
     </script>
 </body>
 </html>
